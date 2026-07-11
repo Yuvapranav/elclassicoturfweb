@@ -1,28 +1,13 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { TURF_LOCATIONS as FALLBACK_LOCATIONS } from '../utils/mockData';
 import { TurfLocation } from '../types';
 import { apiGet } from '../lib/api';
-import Logo from '../components/Logo';
-import { 
-  MapPin, 
-  Phone, 
-  Sun, 
-  Car, 
-  Droplet, 
-  Sofa, 
-  ShowerHead, 
-  Trophy, 
-  Star,
-  Compass, 
-  ChevronRight,
-  ArrowRight
-} from 'lucide-react';
+import { Star, ArrowRight } from 'lucide-react';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  const [selectedLocationId, setSelectedLocationId] = useState<string>('potheri');
   const [TURF_LOCATIONS, setTurfLocations] = useState<TurfLocation[]>(FALLBACK_LOCATIONS);
 
   useEffect(() => {
@@ -34,10 +19,6 @@ export default function HomePage() {
         // keep fallback marketing data if the API is unreachable
       });
   }, []);
-
-  const selectedLocationObj = useMemo(() => {
-    return TURF_LOCATIONS.find(loc => loc.id === selectedLocationId) || TURF_LOCATIONS[0];
-  }, [selectedLocationId, TURF_LOCATIONS]);
 
   return (
     <motion.div
@@ -99,11 +80,11 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 2. VENUE SPECIFICATIONS & INTERACTIVE MOCK MAP */}
+      {/* 2. VENUE TEASER STRIP */}
       <section id="features" className="py-24 px-6 md:px-12 bg-transparent border-t border-white/5">
         <div className="max-w-5xl mx-auto">
-          
-          <div className="text-center max-w-2xl mx-auto mb-16">
+
+          <div className="text-center max-w-2xl mx-auto mb-12">
             <span className="text-[10px] font-sans font-semibold text-ink-secondary uppercase tracking-wide">
               Active Venues
             </span>
@@ -111,132 +92,34 @@ export default function HomePage() {
               Four arenas. <span className="italic text-white font-normal">Endless matches.</span>
             </h2>
             <p className="text-xs text-ink-secondary mt-3 font-light max-w-md mx-auto leading-relaxed">
-              Explore the individual features, contact details, and custom amenities provided across our prime city hubs.
+              Full specs, contact details, and amenities for each hub live on the arenas page.
             </p>
-
-            {/* Quick Branch Selector Tabs */}
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-3 bg-white/5 p-2 rounded-3xl border border-white/5">
-              {TURF_LOCATIONS.map((loc) => {
-                const isSelected = selectedLocationId === loc.id;
-                return (
-                  <button
-                    key={loc.id}
-                    onClick={() => setSelectedLocationId(loc.id)}
-                    className={`p-3.5 rounded-2xl border text-center transition-all duration-300 cursor-pointer flex flex-col items-center justify-center gap-1
-                      ${isSelected 
-                        ? 'bg-white border-white text-brand-navy shadow-lg shadow-white/10 scale-[1.02]' 
-                        : 'bg-white/5 border-white/5 text-white hover:bg-white/10 hover:border-white/15'}`}
-                  >
-                    <span className="text-[11px] font-sans font-semibold tracking-wide uppercase">{loc.name.split(' (')[0]}</span>
-                    <span className={`text-[9px] flex items-center gap-0.5 font-sans mt-0.5 ${isSelected ? 'text-brand-navy/80' : 'text-ink-secondary'}`}>
-                      <Star className="w-2.5 h-2.5 fill-current" />
-                      {loc.rating}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-            {/* Specs detail left */}
-            <div className="lg:col-span-5 space-y-6 text-left font-sans">
-              <span className="text-[10px] font-sans font-semibold text-ink-secondary uppercase tracking-wider">
-                Venue Specs
-              </span>
-              <h3 className="font-sans font-light text-white text-3xl tracking-tight leading-tight mt-2">
-                {selectedLocationObj.name}. <span className="italic text-white font-normal">Active Ground.</span>
-              </h3>
-              
-              <div className="space-y-4 pt-4 border-t border-white/5">
-                <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-white/75 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div>
-                    <h5 className="text-xs font-semibold text-white">Address</h5>
-                    <p className="text-[11px] text-ink-secondary mt-1 font-light leading-relaxed">
-                      {selectedLocationObj.address}
-                    </p>
-                  </div>
-                </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {TURF_LOCATIONS.map((loc) => (
+              <button
+                key={loc.id}
+                onClick={() => navigate('/locations')}
+                className="p-4 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 hover:border-white/15 text-center transition-all duration-300 cursor-pointer flex flex-col items-center justify-center gap-1"
+              >
+                <span className="text-[11px] font-sans font-semibold tracking-wide uppercase text-white">{loc.name.split(' (')[0]}</span>
+                <span className="text-[9px] flex items-center gap-0.5 font-sans mt-0.5 text-ink-secondary">
+                  <Star className="w-2.5 h-2.5 fill-current" />
+                  {loc.rating}
+                </span>
+              </button>
+            ))}
+          </div>
 
-                <div className="flex items-start gap-3">
-                  <Compass className="w-5 h-5 text-white/75 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div>
-                    <h5 className="text-xs font-semibold text-white">Key Landmarks</h5>
-                    <p className="text-[11px] text-ink-secondary mt-1 font-light leading-relaxed">
-                      {selectedLocationObj.landmarks}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <Phone className="w-5 h-5 text-white/75 flex-shrink-0 mt-0.5" strokeWidth={1.5} />
-                  <div>
-                    <h5 className="text-xs font-semibold text-white">Contact & Hours</h5>
-                    <p className="text-[11px] text-ink-secondary mt-1 font-sans">
-                      Phone: {selectedLocationObj.phone === 'Not listed on Maps' ? 'Via Instagram' : selectedLocationObj.phone}
-                    </p>
-                    <p className="text-[10px] font-sans text-white/90 mt-0.5">
-                      Hours: {selectedLocationObj.hours}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Amenities */}
-                <div className="pt-2">
-                  <h5 className="text-xs font-semibold text-white mb-2">Amenities Provided</h5>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedLocationObj.amenities.map((amenity, idx) => (
-                      <span key={idx} className="px-2.5 py-1 bg-white/5 border border-white/10 rounded-md text-[9px] font-sans font-medium text-ink-secondary">
-                        {amenity}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3 pt-2">
-                <button
-                  onClick={() => navigate(`/bookings?location=${selectedLocationId}`)}
-                  className="px-6 py-2.5 rounded-full bg-white text-brand-navy text-[9px] font-sans font-bold uppercase tracking-wide transition-all duration-300 hover:scale-105 cursor-pointer shadow-lg hover:bg-white/95"
-                >
-                  Book This Location
-                </button>
-              </div>
-            </div>
-
-            {/* Simulated Map right */}
-            <div className="lg:col-span-7">
-              <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-white/10 p-2 liquid-glass">
-                <div className="absolute inset-0 bg-[#07131d] flex flex-col items-center justify-center p-6 text-center">
-                  
-                  {/* Styled Map Graphics Mock */}
-                  <div className="absolute inset-0 opacity-[0.25]" 
-                       style={{ 
-                         backgroundImage: 'radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px)', 
-                         backgroundSize: '16px 16px' 
-                       }} 
-                   />
-                  
-                  {/* Map Roads lines mock */}
-                  <div className="absolute w-full h-[2px] bg-white/5 top-1/3 left-0 transform -rotate-12" />
-                  <div className="absolute w-[2px] h-full bg-white/5 left-1/4 top-0 transform rotate-45" />
-                  <div className="absolute w-[2px] h-full bg-white/5 right-1/3 top-0" />
-                  
-                  {/* Floating map pin icon */}
-                  <div className="relative z-10 flex flex-col items-center">
-                    <div className="w-12 h-12 rounded-full bg-brand-green border border-brand-navy flex items-center justify-center shadow-lg animate-bounce duration-1000">
-                      <span className="text-[10px] font-bold text-brand-navy font-mono">MAP</span>
-                    </div>
-                    <div className="mt-3 bg-[#0a1e2c] border border-white/10 rounded-2xl p-3 shadow-md max-w-xs">
-                      <h4 className="text-xs font-semibold text-white">{selectedLocationObj.name}</h4>
-                      <p className="text-[9px] font-mono text-ink-secondary mt-0.5 truncate">{selectedLocationObj.address}</p>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </div>
+          <div className="text-center mt-10">
+            <button
+              onClick={() => navigate('/locations')}
+              className="px-6 py-2.5 rounded-full border border-white/30 bg-white/5 hover:bg-white/10 hover:border-white/50 text-[9px] font-sans font-bold uppercase tracking-wide text-white transition-all duration-300 hover:scale-105 cursor-pointer inline-flex items-center gap-2"
+            >
+              View All Locations
+              <ArrowRight className="w-3.5 h-3.5" strokeWidth={2} />
+            </button>
           </div>
 
         </div>
