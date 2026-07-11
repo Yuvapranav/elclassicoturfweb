@@ -44,14 +44,20 @@ export default function Navbar() {
           >
             Home
           </NavLink>
-          <NavLink 
-            to="/locations" 
+          <NavLink
+            to="/reviews"
+            className={({ isActive }) => `text-xs uppercase tracking-wide transition-all cursor-pointer ${isActive ? 'font-bold text-white' : 'font-medium text-ink-secondary hover:text-white'}`}
+          >
+            Reviews
+          </NavLink>
+          <NavLink
+            to="/locations"
             className={({ isActive }) => `text-xs uppercase tracking-wide transition-all cursor-pointer ${isActive ? 'font-bold text-white' : 'font-medium text-ink-secondary hover:text-white'}`}
           >
             Locations
           </NavLink>
-          <NavLink 
-            to="/bookings" 
+          <NavLink
+            to="/bookings"
             className={({ isActive }) => `text-xs uppercase tracking-wide transition-all cursor-pointer ${isActive ? 'font-bold text-white' : 'font-medium text-ink-secondary hover:text-white'}`}
           >
             My Bookings
@@ -122,8 +128,15 @@ export default function Navbar() {
           >
             Home
           </NavLink>
-          <NavLink 
-            to="/locations" 
+          <NavLink
+            to="/reviews"
+            onClick={() => setMobileMenuOpen(false)}
+            className={({ isActive }) => `w-full text-left py-2 px-4 text-xs font-sans uppercase tracking-wide rounded-full transition-all ${isActive ? 'bg-white/5 font-bold text-white' : 'text-ink-secondary hover:text-white'}`}
+          >
+            Reviews
+          </NavLink>
+          <NavLink
+            to="/locations"
             onClick={() => setMobileMenuOpen(false)}
             className={({ isActive }) => `w-full text-left py-2 px-4 text-xs font-sans uppercase tracking-wide rounded-full transition-all ${isActive ? 'bg-white/5 font-bold text-white' : 'text-ink-secondary hover:text-white'}`}
           >

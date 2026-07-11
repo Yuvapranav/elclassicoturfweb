@@ -4,6 +4,7 @@ import { AnimatePresence } from 'motion/react';
 import { AuthProvider } from './lib/auth-context';
 import LoginPage from './pages/LoginPage';
 import HomePage from './pages/HomePage';
+import ReviewsPage from './pages/ReviewsPage';
 import LocationsPage from './pages/LocationsPage';
 import BookingsPage from './pages/BookingsPage';
 import PaymentPage from './pages/PaymentPage';
@@ -38,6 +39,7 @@ function AnimatedAppContent() {
           <AnimatePresence mode="wait">
             <Routes>
               <Route path="/" element={<HomePage />} />
+              <Route path="/reviews" element={<ReviewsPage />} />
               <Route path="/locations" element={<LocationsPage />} />
               <Route path="/bookings" element={<BookingsPage />} />
               <Route path="/bookings/payment" element={<PaymentPage />} />
