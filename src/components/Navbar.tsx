@@ -45,6 +45,12 @@ export default function Navbar() {
             Home
           </NavLink>
           <NavLink
+            to="/about"
+            className={({ isActive }) => `text-xs uppercase tracking-wide transition-all cursor-pointer ${isActive ? 'font-bold text-white' : 'font-medium text-ink-secondary hover:text-white'}`}
+          >
+            About
+          </NavLink>
+          <NavLink
             to="/reviews"
             className={({ isActive }) => `text-xs uppercase tracking-wide transition-all cursor-pointer ${isActive ? 'font-bold text-white' : 'font-medium text-ink-secondary hover:text-white'}`}
           >
@@ -127,6 +133,13 @@ export default function Navbar() {
             className={({ isActive }) => `w-full text-left py-2 px-4 text-xs font-sans uppercase tracking-wide rounded-full transition-all ${isActive ? 'bg-white/5 font-bold text-white' : 'text-ink-secondary hover:text-white'}`}
           >
             Home
+          </NavLink>
+          <NavLink
+            to="/about"
+            onClick={() => setMobileMenuOpen(false)}
+            className={({ isActive }) => `w-full text-left py-2 px-4 text-xs font-sans uppercase tracking-wide rounded-full transition-all ${isActive ? 'bg-white/5 font-bold text-white' : 'text-ink-secondary hover:text-white'}`}
+          >
+            About
           </NavLink>
           <NavLink
             to="/reviews"
