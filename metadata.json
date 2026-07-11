@@ -1,0 +1,6 @@
+{
+  "name": "El Classico Turf",
+  "description": "A premium booking platform for a football and cricket turf ground, featuring a date and slot scheduler, simulated payments, and a detailed admin dashboard with live booking statistics and revenue analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

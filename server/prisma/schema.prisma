@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String
+  phone        String?
+  role         String    @default("user") // "user" | "admin"
+  createdAt    DateTime  @default(now())
+  bookings     Booking[]
+}
+
+model Location {
+  id           String       @id
+  name         String
+  address      String
+  rating       Float
+  reviewsCount Int
+  hours        String
+  phone        String
+  price        String
+  websiteLabel String
+  websiteUrl   String
+  amenities    String[]
+  landmarks    String
+  turfConfigs  TurfConfig[]
+  bookings     Booking[]
+}
+
+model TurfConfig {
+  id           String    @id @default(cuid())
+  type         String // "5-a-side" | "6-a-side"
+  name         String
+  pricePerHour Int
+  description  String
+  amenities    String[]
+  imageUrl     String
+  locationId   String
+  location     Location  @relation(fields: [locationId], references: [id])
+  bookings     Booking[]
+}
+
+model Booking {
+  id                String   @id @default(cuid())
+  userId            String?
+  user              User?    @relation(fields: [userId], references: [id])
+  customerName      String
+  customerPhone     String
+  locationId        String
+  location          Location @relation(fields: [locationId], references: [id])
+  turfConfigId      String
+  turfConfig        TurfConfig @relation(fields: [turfConfigId], references: [id])
+  date              String // YYYY-MM-DD
+  timeSlot          String // e.g. "06:00 - 07:00"
+  duration          Int
+  amount            Int
+  paymentMethod     String?
+  paymentStatus     String   @default("Pending")
+  status            String   @default("Confirmed")
+  razorpayOrderId   String?
+  razorpayPaymentId String?
+  createdAt         DateTime @default(now())
+
+  @@unique([locationId, turfConfigId, date, timeSlot])
+}
