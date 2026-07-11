@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { TURF_LOCATIONS as FALLBACK_LOCATIONS } from '../utils/mockData';
 import { TurfLocation } from '../types';
@@ -7,7 +6,6 @@ import { apiGet } from '../lib/api';
 import { Star, MapPin, Phone, Clock } from 'lucide-react';
 
 export default function LocationsPage() {
-  const navigate = useNavigate();
   const [TURF_LOCATIONS, setTurfLocations] = useState<TurfLocation[]>(FALLBACK_LOCATIONS);
 
   useEffect(() => {
@@ -108,14 +106,6 @@ export default function LocationsPage() {
                 </div>
               </div>
             </div>
-
-            {/* CTA Button */}
-            <button
-              onClick={() => navigate(`/bookings?location=${loc.id}`)}
-              className="w-full py-3 bg-white text-brand-navy hover:bg-white/95 text-[10px] font-sans font-bold uppercase tracking-wider rounded-full transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shadow-md"
-            >
-              Book This Location
-            </button>
           </div>
         ))}
       </div>
