@@ -13,7 +13,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Navbar from './components/Navbar';
 import Logo from './components/Logo';
 // @ts-ignore
-import turfBg from './assets/images/turf_sunset_background_1783617030520.jpg';
+import turfBg from './assets/images/turf_ground.webp';
 
 function AnimatedAppContent() {
   const location = useLocation();
