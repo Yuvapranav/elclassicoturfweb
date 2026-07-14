@@ -2,22 +2,15 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAdmin } from '../lib/auth';
 import { serializeBooking } from '../lib/serialize';
+import { todayIST, currentMonthIST } from '../lib/constants';
 
 const router = Router();
 
 router.use(requireAdmin);
 
-function todayStr(): string {
-  return new Date().toISOString().split('T')[0];
-}
-
-function currentMonthStr(): string {
-  return new Date().toISOString().substring(0, 7); // YYYY-MM
-}
-
 router.get('/stats', async (_req, res) => {
-  const today = todayStr();
-  const month = currentMonthStr();
+  const today = todayIST();
+  const month = currentMonthIST();
 
   const [todayBookings, monthBookings, turfConfigCount] = await Promise.all([
     prisma.booking.findMany({ where: { date: today, status: { not: 'Cancelled' } } }),
@@ -64,8 +57,17 @@ router.get('/bookings', async (req, res) => {
   res.json(bookings.map(serializeBooking));
 });
 
+const VALID_STATUSES = ['Confirmed', 'Completed', 'Cancelled'];
+const VALID_PAYMENT_STATUSES = ['Paid', 'Pending'];
+
 router.patch('/bookings/:id', async (req, res) => {
   const { status, paymentStatus } = req.body || {};
+  if (status && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` });
+  }
+  if (paymentStatus && !VALID_PAYMENT_STATUSES.includes(paymentStatus)) {
+    return res.status(400).json({ error: `paymentStatus must be one of: ${VALID_PAYMENT_STATUSES.join(', ')}` });
+  }
   const data: any = {};
   if (status) data.status = status;
   if (paymentStatus) data.paymentStatus = paymentStatus;
@@ -93,8 +95,8 @@ router.post('/slot-block', async (req, res) => {
   }
 
   const turfConfig = await prisma.turfConfig.findUnique({ where: { id: turfConfigId } });
-  if (!turfConfig) {
-    return res.status(400).json({ error: 'Invalid turf configuration' });
+  if (!turfConfig || turfConfig.locationId !== locationId) {
+    return res.status(400).json({ error: 'Invalid location/turf configuration' });
   }
 
   try {

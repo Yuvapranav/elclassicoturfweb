@@ -32,10 +32,15 @@ export function verifyToken(token: string): TokenPayload | null {
 
 export const COOKIE_NAME = 'token';
 
+// In production the frontend (GitHub Pages) and API (Render) live on different
+// sites, so the auth cookie must be SameSite=None — and browsers only accept
+// that combined with Secure. Locally we keep Lax so plain http still works.
+const isProduction = process.env.NODE_ENV === 'production';
+
 export const cookieOptions = {
   httpOnly: true,
-  sameSite: 'lax' as const,
-  secure: process.env.NODE_ENV === 'production',
+  sameSite: (isProduction ? 'none' : 'lax') as 'none' | 'lax',
+  secure: isProduction,
   maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
 };
 

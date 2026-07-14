@@ -53,7 +53,7 @@ router.post('/create-order', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/verify-payment', async (req, res) => {
+router.post('/verify-payment', requireAuth, async (req, res) => {
   const { bookingId, razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body || {};
 
   if (!bookingId || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -65,6 +65,17 @@ router.post('/verify-payment', async (req, res) => {
     return res.status(500).json({ error: 'Razorpay is not configured' });
   }
 
+  const booking = await prisma.booking.findUnique({ where: { id: bookingId } });
+  if (!booking || booking.userId !== req.user!.id) {
+    return res.status(404).json({ error: 'Booking not found' });
+  }
+  // The signature only proves order+payment are genuine; the order must also
+  // be the one created for THIS booking, or a paid order could be replayed
+  // against a different (more expensive) booking.
+  if (!booking.razorpayOrderId || booking.razorpayOrderId !== razorpay_order_id) {
+    return res.status(400).json({ error: 'Order does not match this booking' });
+  }
+
   const expectedSignature = crypto
     .createHmac('sha256', keySecret)
     .update(`${razorpay_order_id}|${razorpay_payment_id}`)
@@ -74,8 +85,8 @@ router.post('/verify-payment', async (req, res) => {
     return res.status(400).json({ error: 'Payment signature verification failed' });
   }
 
-  const booking = await prisma.booking.update({
-    where: { id: bookingId },
+  await prisma.booking.update({
+    where: { id: booking.id },
     data: {
       paymentStatus: 'Paid',
       razorpayPaymentId: razorpay_payment_id,

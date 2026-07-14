@@ -35,3 +35,16 @@ export function getConsecutiveSlots(startSlot: string, duration: number): string
   if (startIndex + duration > TIME_SLOTS.length) return null;
   return TIME_SLOTS.slice(startIndex, startIndex + duration);
 }
+
+export const MAX_BOOKING_HOURS = 4;
+
+export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// The business runs on IST; "today" must not flip at UTC midnight (5:30am IST).
+export function todayIST(): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+}
+
+export function currentMonthIST(): string {
+  return todayIST().substring(0, 7); // YYYY-MM
+}
