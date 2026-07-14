@@ -17,6 +17,21 @@ model User {
   role         String    @default("user") // "user" | "admin"
   createdAt    DateTime  @default(now())
   bookings     Booking[]
+  sessions     Session[]
+}
+
+// One row per active login. Lets us revoke a session server-side (logout, or
+// admin kill) so a stolen token stops working immediately instead of staying
+// valid until it expires. csrfToken is the synchronizer token for this session.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  csrfToken String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Location {

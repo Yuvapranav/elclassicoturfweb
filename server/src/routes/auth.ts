@@ -1,11 +1,22 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma';
-import { hashPassword, verifyPassword, signToken, COOKIE_NAME, cookieOptions, requireAuth } from '../lib/auth';
+import {
+  hashPassword,
+  verifyPassword,
+  createSession,
+  revokeByToken,
+  COOKIE_NAME,
+  cookieOptions,
+  requireAuth,
+} from '../lib/auth';
 
 const router = Router();
 
-function serializeUser(u: { id: string; email: string; name: string; phone: string | null; role: string }) {
-  return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role };
+function serializeUser(
+  u: { id: string; email: string; name: string; phone: string | null; role: string },
+  csrfToken?: string,
+) {
+  return { id: u.id, email: u.email, name: u.name, phone: u.phone, role: u.role, csrfToken };
 }
 
 router.post('/signup', async (req, res) => {
@@ -31,9 +42,9 @@ router.post('/signup', async (req, res) => {
     data: { email, passwordHash, name, phone: phone || null },
   });
 
-  const token = signToken({ userId: user.id });
+  const { token, csrfToken } = await createSession(user.id);
   res.cookie(COOKIE_NAME, token, cookieOptions);
-  res.status(201).json(serializeUser(user));
+  res.status(201).json(serializeUser(user, csrfToken));
 });
 
 router.post('/login', async (req, res) => {
@@ -47,18 +58,25 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
-  const token = signToken({ userId: user.id });
+  const { token, csrfToken } = await createSession(user.id);
   res.cookie(COOKIE_NAME, token, cookieOptions);
-  res.json(serializeUser(user));
+  res.json(serializeUser(user, csrfToken));
 });
 
-router.post('/logout', (_req, res) => {
+router.post('/logout', async (req, res) => {
+  // Revoke server-side so the token is dead immediately, not just cleared client-side.
+  await revokeByToken(req.cookies?.[COOKIE_NAME]);
   res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: undefined });
   res.json({ ok: true });
 });
 
-router.get('/me', requireAuth, (req, res) => {
-  res.json(serializeUser(req.user!));
+router.get('/me', requireAuth, async (req, res) => {
+  // Return this session's CSRF token so the SPA can resume after a page reload
+  // (its in-memory copy is gone) without forcing a re-login.
+  const session = req.sessionId
+    ? await prisma.session.findUnique({ where: { id: req.sessionId } })
+    : null;
+  res.json(serializeUser(req.user!, session?.csrfToken));
 });
 
 export default router;

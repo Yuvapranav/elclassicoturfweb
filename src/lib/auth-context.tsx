@@ -1,6 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
-import { apiGet, apiPost, ApiError } from './api';
+import { apiGet, apiPost, ApiError, setCsrfToken } from './api';
+
+// login/signup/me all return the user plus this session's CSRF token.
+type AuthResponse = User & { csrfToken?: string };
 
 interface AuthContextValue {
   user: User | null;
@@ -18,9 +21,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
-    apiGet<User>('/auth/me')
+    apiGet<AuthResponse>('/auth/me')
       .then((u) => {
-        if (!cancelled) setUser(u);
+        if (cancelled) return;
+        setCsrfToken(u.csrfToken ?? null);
+        setUser(u);
       })
       .catch(() => {
         if (!cancelled) setUser(null);
@@ -34,13 +39,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    const u = await apiPost<User>('/auth/login', { email, password });
+    const u = await apiPost<AuthResponse>('/auth/login', { email, password });
+    setCsrfToken(u.csrfToken ?? null);
     setUser(u);
     return u;
   }, []);
 
   const signup = useCallback(async (email: string, password: string, name: string, phone?: string) => {
-    const u = await apiPost<User>('/auth/signup', { email, password, name, phone });
+    const u = await apiPost<AuthResponse>('/auth/signup', { email, password, name, phone });
+    setCsrfToken(u.csrfToken ?? null);
     setUser(u);
     return u;
   }, []);
@@ -51,6 +58,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (e) {
       // ignore network errors on logout
     }
+    setCsrfToken(null);
     setUser(null);
   }, []);
 
