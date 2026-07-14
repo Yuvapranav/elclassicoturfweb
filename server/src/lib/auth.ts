@@ -1,9 +1,22 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from './prisma';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me';
+// Never fall back to a hardcoded secret: a known signing key lets anyone forge
+// a valid admin token. Refuse to start in production, and use an obviously
+// ephemeral per-boot secret in dev (so a missing .env is a loud dev-only
+// annoyance, not a silent prod backdoor).
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (secret && secret.length >= 32 && secret !== 'change-me') return secret;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be set to a strong (32+ char) value in production');
+  }
+  console.warn('[auth] JWT_SECRET missing/weak — using a random dev-only secret; sessions reset on restart.');
+  return require('crypto').randomBytes(48).toString('hex');
+})();
+
 const SALT_ROUNDS = 10;
 
 export interface TokenPayload {
