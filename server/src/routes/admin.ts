@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma';
 import { requireAdmin } from '../lib/auth';
 import { serializeBooking } from '../lib/serialize';
-import { todayIST, currentMonthIST } from '../lib/constants';
+import { todayIST, currentMonthIST, lastMonthIST, lastNDatesIST } from '../lib/constants';
 
 const router = Router();
 
@@ -38,6 +38,77 @@ router.get('/stats', async (_req, res) => {
     totalBookingsThisMonth: monthBookings,
     occupancyRate: Math.min(occupancyRate, 100),
   });
+});
+
+// Deeper business analytics for the "Sales & Insights" view: money collected
+// vs still owed, month-over-month trend, per-branch revenue, a 30-day series,
+// the single best sales day, and the busiest time slots.
+router.get('/analytics', async (_req, res) => {
+  const today = todayIST();
+  const thisMonth = currentMonthIST();
+  const prevMonth = lastMonthIST();
+
+  // Real customer bookings only (exclude the zero-value ADMIN LOCK rows).
+  const bookings = await prisma.booking.findMany({
+    where: { customerName: { not: 'ADMIN LOCK' } },
+    include: { location: true },
+  });
+
+  const active = bookings.filter((b) => b.status !== 'Cancelled');
+  const paid = active.filter((b) => b.paymentStatus === 'Paid');
+  const pending = active.filter((b) => b.paymentStatus === 'Pending');
+  const sum = (arr: typeof bookings) => arr.reduce((s, b) => s + b.amount, 0);
+
+  const revenue = {
+    today: sum(paid.filter((b) => b.date === today)),
+    thisMonth: sum(paid.filter((b) => b.date.startsWith(thisMonth))),
+    lastMonth: sum(paid.filter((b) => b.date.startsWith(prevMonth))),
+    outstanding: sum(pending), // money booked but not yet collected
+    collectedAllTime: sum(paid),
+  };
+
+  const counts = {
+    paid: paid.length,
+    pending: pending.length,
+    cancelled: bookings.length - active.length,
+    active: active.length,
+  };
+
+  // Revenue + booking count per branch (paid revenue).
+  const branchMap = new Map<string, { locationId: string; name: string; revenue: number; bookings: number }>();
+  for (const b of active) {
+    const key = b.locationId;
+    const row = branchMap.get(key) || { locationId: key, name: b.location.name, revenue: 0, bookings: 0 };
+    row.bookings += 1;
+    if (b.paymentStatus === 'Paid') row.revenue += b.amount;
+    branchMap.set(key, row);
+  }
+  const revenueByBranch = Array.from(branchMap.values()).sort((a, b) => b.revenue - a.revenue);
+
+  // 30-day daily series (paid revenue + booking count), oldest first.
+  const dates = lastNDatesIST(30);
+  const dailyTrend = dates.map((date) => {
+    const dayActive = active.filter((b) => b.date === date);
+    return {
+      date,
+      revenue: sum(dayActive.filter((b) => b.paymentStatus === 'Paid')),
+      bookings: dayActive.length,
+    };
+  });
+  const bestDay = dailyTrend.reduce<{ date: string; revenue: number } | null>((best, d) => {
+    if (d.revenue > 0 && (!best || d.revenue > best.revenue)) return { date: d.date, revenue: d.revenue };
+    return best;
+  }, null);
+
+  // Busiest time slots across all active bookings.
+  const slotMap = new Map<string, number>();
+  for (const b of active) slotMap.set(b.timeSlot, (slotMap.get(b.timeSlot) || 0) + 1);
+  const peakSlots = Array.from(slotMap.entries())
+    .map(([timeSlot, count]) => ({ timeSlot, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 6);
+
+  res.json({ revenue, counts, revenueByBranch, dailyTrend, bestDay, peakSlots });
 });
 
 router.get('/bookings', async (req, res) => {

@@ -18,7 +18,13 @@ import {
   TrendingUp,
   DollarSign,
   BookOpen,
-  Percent
+  Percent,
+  LineChart,
+  Wallet,
+  ArrowUpRight,
+  ArrowDownRight,
+  Trophy,
+  Flame
 } from 'lucide-react';
 
 type LocationWithConfigs = TurfLocation & { turfConfigs: TurfConfig[] };
@@ -29,6 +35,21 @@ interface CustomerRow {
   bookingsCount: number;
   totalSpend: number;
   lastBookingDate: string;
+}
+
+interface Analytics {
+  revenue: {
+    today: number;
+    thisMonth: number;
+    lastMonth: number;
+    outstanding: number;
+    collectedAllTime: number;
+  };
+  counts: { paid: number; pending: number; cancelled: number; active: number };
+  revenueByBranch: { locationId: string; name: string; revenue: number; bookings: number }[];
+  dailyTrend: { date: string; revenue: number; bookings: number }[];
+  bestDay: { date: string; revenue: number } | null;
+  peakSlots: { timeSlot: string; count: number }[];
 }
 
 const EMPTY_STATS: DashboardStats = {
@@ -49,8 +70,8 @@ export default function AdminDashboard() {
     }
   }, [user, navigate]);
 
-  // Dashboard Navigation tabs: 'overview' | 'bookings' | 'slots' | 'customers'
-  const [activeTab, setActiveTab] = useState<'overview' | 'bookings' | 'slots' | 'customers'>('overview');
+  // Dashboard Navigation tabs
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'bookings' | 'slots' | 'customers'>('overview');
 
   // 1. Table Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,6 +86,7 @@ export default function AdminDashboard() {
 
   // Data from the server
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [customerList, setCustomerList] = useState<CustomerRow[]>([]);
   const [apiLocations, setApiLocations] = useState<LocationWithConfigs[]>([]);
@@ -74,6 +96,7 @@ export default function AdminDashboard() {
   const refreshStats = useCallback(() => {
     if (!isAdmin) return;
     apiGet<DashboardStats>('/admin/stats').then(setStats).catch(() => setStats(EMPTY_STATS));
+    apiGet<Analytics>('/admin/analytics').then(setAnalytics).catch(() => setAnalytics(null));
   }, [isAdmin]);
 
   const refreshBookings = useCallback(() => {
@@ -124,6 +147,23 @@ export default function AdminDashboard() {
       };
     });
   }, [allBookings, slotManageDate, slotManageTurf, slotManageLocation]);
+
+  // Month-over-month revenue change (%) for the Sales view; null when there's
+  // no prior month to compare against.
+  const momChange = useMemo(() => {
+    if (!analytics || analytics.revenue.lastMonth <= 0) return null;
+    const { thisMonth, lastMonth } = analytics.revenue;
+    return Math.round(((thisMonth - lastMonth) / lastMonth) * 100);
+  }, [analytics]);
+
+  const maxBranchRevenue = useMemo(
+    () => Math.max(1, ...(analytics?.revenueByBranch.map((b) => b.revenue) ?? [1])),
+    [analytics],
+  );
+  const maxPeakCount = useMemo(
+    () => Math.max(1, ...(analytics?.peakSlots.map((s) => s.count) ?? [1])),
+    [analytics],
+  );
 
   const handleUpdateBookingStatus = async (id: string, status: string, paymentStatus?: string) => {
     try {
@@ -193,6 +233,7 @@ export default function AdminDashboard() {
 
             {[
               { id: 'overview', label: 'Live Overview', icon: <BarChart3 className="w-4 h-4" /> },
+              { id: 'analytics', label: 'Sales & Insights', icon: <LineChart className="w-4 h-4" /> },
               { id: 'bookings', label: 'Bookings Table', icon: <Calendar className="w-4 h-4" /> },
               { id: 'slots', label: 'Slot Blocker', icon: <Clock className="w-4 h-4" /> },
               { id: 'customers', label: 'Customer Directory', icon: <Users className="w-4 h-4" /> }
@@ -238,7 +279,11 @@ export default function AdminDashboard() {
               El Classico Control Panel
             </span>
             <h2 className="font-sans font-light text-white text-3xl md:text-4xl tracking-tight leading-none mt-2 capitalize">
-              {activeTab === 'overview' ? 'Live Analytics & Performance' : `${activeTab} Management`}
+              {activeTab === 'overview'
+                ? 'Live Analytics & Performance'
+                : activeTab === 'analytics'
+                  ? 'Sales & Insights'
+                  : `${activeTab} Management`}
             </h2>
           </div>
 
@@ -395,6 +440,139 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {/* ==================== A2. SALES & INSIGHTS TAB ==================== */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-8 animate-fade-rise duration-500">
+            {!analytics ? (
+              <div className="liquid-glass p-12 rounded-2xl border border-white/5 text-center text-ink-secondary text-sm">
+                Loading sales data…
+              </div>
+            ) : (
+              <>
+                {/* Revenue summary cards */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* This month + MoM trend */}
+                  <div className="liquid-glass p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">Revenue This Month</span>
+                      <div className="p-1.5 rounded-full bg-white/5 border border-white/10 text-white"><DollarSign className="w-3.5 h-3.5" /></div>
+                    </div>
+                    <div className="mt-4">
+                      <h3 className="text-3xl font-light text-white">₹{analytics.revenue.thisMonth.toLocaleString('en-IN')}</h3>
+                      {momChange === null ? (
+                        <p className="text-[9px] text-ink-secondary mt-1 uppercase tracking-wide">No prior month to compare</p>
+                      ) : (
+                        <div className={`flex items-center gap-1 text-[10px] mt-1 font-semibold ${momChange >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                          {momChange >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                          <span>{Math.abs(momChange)}% vs last month</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Outstanding (money owed) */}
+                  <div className="liquid-glass p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">Payments Due</span>
+                      <div className="p-1.5 rounded-full bg-white/5 border border-white/10 text-amber-300"><Wallet className="w-3.5 h-3.5" /></div>
+                    </div>
+                    <div className="mt-4">
+                      <h3 className="text-3xl font-light text-amber-300">₹{analytics.revenue.outstanding.toLocaleString('en-IN')}</h3>
+                      <p className="text-[9px] text-ink-secondary mt-1 uppercase tracking-wide">{analytics.counts.pending} unpaid bookings</p>
+                    </div>
+                  </div>
+
+                  {/* Collected all time */}
+                  <div className="liquid-glass p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">Collected (All Time)</span>
+                      <div className="p-1.5 rounded-full bg-white/5 border border-white/10 text-emerald-300"><TrendingUp className="w-3.5 h-3.5" /></div>
+                    </div>
+                    <div className="mt-4">
+                      <h3 className="text-3xl font-light text-white">₹{analytics.revenue.collectedAllTime.toLocaleString('en-IN')}</h3>
+                      <p className="text-[9px] text-ink-secondary mt-1 uppercase tracking-wide">{analytics.counts.paid} paid bookings</p>
+                    </div>
+                  </div>
+
+                  {/* Best sales day */}
+                  <div className="liquid-glass p-5 rounded-2xl border border-white/5 flex flex-col justify-between">
+                    <div className="flex justify-between items-start">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-secondary">Best Day (30d)</span>
+                      <div className="p-1.5 rounded-full bg-white/5 border border-white/10 text-white"><Trophy className="w-3.5 h-3.5" /></div>
+                    </div>
+                    <div className="mt-4">
+                      {analytics.bestDay ? (
+                        <>
+                          <h3 className="text-3xl font-light text-white">₹{analytics.bestDay.revenue.toLocaleString('en-IN')}</h3>
+                          <p className="text-[9px] text-ink-secondary mt-1 uppercase tracking-wide">on {analytics.bestDay.date}</p>
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="text-3xl font-light text-white/40">—</h3>
+                          <p className="text-[9px] text-ink-secondary mt-1 uppercase tracking-wide">No paid revenue yet</p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Revenue trend chart (reuses the SVG chart, fed real bookings) */}
+                <div className="liquid-glass p-6 rounded-2xl border border-white/5">
+                  <CustomChart bookings={allBookings} />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Revenue by branch */}
+                  <div className="liquid-glass p-6 rounded-2xl border border-white/5 space-y-4">
+                    <h3 className="font-semibold text-white text-base tracking-tight">Revenue by Branch</h3>
+                    {analytics.revenueByBranch.length === 0 ? (
+                      <p className="text-xs text-ink-secondary">No revenue recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {analytics.revenueByBranch.map((b) => (
+                          <div key={b.locationId} className="space-y-1">
+                            <div className="flex justify-between items-baseline text-xs">
+                              <span className="text-white font-medium">{b.name.split(' (')[0]}</span>
+                              <span className="text-white font-sans">₹{b.revenue.toLocaleString('en-IN')} <span className="text-ink-secondary text-[10px]">· {b.bookings} bookings</span></span>
+                            </div>
+                            <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                              <div className="bg-brand-green h-full rounded-full transition-all duration-700" style={{ width: `${(b.revenue / maxBranchRevenue) * 100}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Peak booking hours */}
+                  <div className="liquid-glass p-6 rounded-2xl border border-white/5 space-y-4">
+                    <h3 className="font-semibold text-white text-base tracking-tight flex items-center gap-2">
+                      <Flame className="w-4 h-4 text-amber-300" /> Busiest Time Slots
+                    </h3>
+                    {analytics.peakSlots.length === 0 ? (
+                      <p className="text-xs text-ink-secondary">No bookings recorded yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        {analytics.peakSlots.map((s) => (
+                          <div key={s.timeSlot} className="space-y-1">
+                            <div className="flex justify-between items-baseline text-xs">
+                              <span className="text-white font-medium">{s.timeSlot}</span>
+                              <span className="text-ink-secondary text-[10px]">{s.count} booking{s.count === 1 ? '' : 's'}</span>
+                            </div>
+                            <div className="w-full bg-white/5 h-2 rounded-full overflow-hidden">
+                              <div className="bg-white h-full rounded-full transition-all duration-700" style={{ width: `${(s.count / maxPeakCount) * 100}%` }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
         {/* ==================== B. BOOKINGS TABLE TAB ==================== */}
         {activeTab === 'bookings' && (
           <div className="space-y-6 animate-fade-rise duration-500">
@@ -481,8 +659,9 @@ export default function AdminDashboard() {
                       <th className="p-4 font-semibold">Ref ID</th>
                       <th className="p-4 font-semibold">Customer Details</th>
                       <th className="p-4 font-semibold">Branch</th>
-                      <th className="p-4 font-semibold">Date</th>
+                      <th className="p-4 font-semibold">Play Date</th>
                       <th className="p-4 font-semibold">Time Slot</th>
+                      <th className="p-4 font-semibold">Booked On</th>
                       <th className="p-4 font-semibold">Arena Type</th>
                       <th className="p-4 text-right font-semibold">Cost</th>
                       <th className="p-4 text-center font-semibold">Payment</th>
@@ -493,7 +672,7 @@ export default function AdminDashboard() {
                   <tbody>
                     {filteredBookings.length === 0 ? (
                       <tr>
-                        <td colSpan={10} className="p-12 text-center text-ink-secondary">
+                        <td colSpan={11} className="p-12 text-center text-ink-secondary">
                           <Ban className="w-8 h-8 mx-auto text-ink-secondary/30 mb-2.5" strokeWidth={1.5} />
                           No reservations match the specified parameters.
                         </td>
@@ -522,6 +701,9 @@ export default function AdminDashboard() {
                             </td>
                             <td className="p-4 font-sans text-ink-secondary">{b.date}</td>
                             <td className="p-4 font-sans text-ink-secondary">{b.timeSlot} ({b.duration}h)</td>
+                            <td className="p-4 font-sans text-ink-secondary whitespace-nowrap">
+                              {new Date(b.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                            </td>
                             <td className="p-4 text-ink-secondary font-medium capitalize">{b.turfType}</td>
                             <td className="p-4 text-right font-sans text-white">
                               {isBlock ? '-' : `₹${b.amount.toLocaleString('en-IN')}`}

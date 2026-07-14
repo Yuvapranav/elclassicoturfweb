@@ -48,3 +48,22 @@ export function todayIST(): string {
 export function currentMonthIST(): string {
   return todayIST().substring(0, 7); // YYYY-MM
 }
+
+// "YYYY-MM" for the calendar month before the current IST month.
+export function lastMonthIST(): string {
+  const [y, m] = todayIST().split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1, 1));
+  d.setUTCMonth(d.getUTCMonth() - 1);
+  return d.toISOString().substring(0, 7);
+}
+
+// The last `n` calendar dates (IST), oldest first, as "YYYY-MM-DD" strings.
+export function lastNDatesIST(n: number): string[] {
+  const [y, m, d] = todayIST().split('-').map(Number);
+  const base = Date.UTC(y, m - 1, d);
+  const out: string[] = [];
+  for (let i = n - 1; i >= 0; i--) {
+    out.push(new Date(base - i * 86400000).toISOString().substring(0, 10));
+  }
+  return out;
+}
