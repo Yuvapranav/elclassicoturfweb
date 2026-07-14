@@ -24,7 +24,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Trophy,
-  Flame
+  Flame,
+  Phone,
+  Check
 } from 'lucide-react';
 
 type LocationWithConfigs = TurfLocation & { turfConfigs: TurfConfig[] };
@@ -71,7 +73,7 @@ export default function AdminDashboard() {
   }, [user, navigate]);
 
   // Dashboard Navigation tabs
-  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'bookings' | 'slots' | 'customers'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'analytics' | 'bookings' | 'phone' | 'slots' | 'customers'>('overview');
 
   // 1. Table Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -83,6 +85,19 @@ export default function AdminDashboard() {
   const [slotManageDate, setSlotManageDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [slotManageTurf, setSlotManageTurf] = useState<TurfType>('5-a-side');
   const [slotManageLocation, setSlotManageLocation] = useState<string>('potheri');
+
+  // 3. Phone / walk-in booking form states
+  const today = new Date().toISOString().split('T')[0];
+  const [phoneLocation, setPhoneLocation] = useState<string>('potheri');
+  const [phoneTurf, setPhoneTurf] = useState<TurfType>('5-a-side');
+  const [phoneDate, setPhoneDate] = useState<string>(today);
+  const [phoneStartSlot, setPhoneStartSlot] = useState<string>('');
+  const [phoneDuration, setPhoneDuration] = useState<number>(1);
+  const [phoneName, setPhoneName] = useState('');
+  const [phonePhone, setPhonePhone] = useState('');
+  const [phonePaid, setPhonePaid] = useState<boolean>(false);
+  const [phoneSubmitting, setPhoneSubmitting] = useState(false);
+  const [phoneFeedback, setPhoneFeedback] = useState<{ ok: boolean; msg: string } | null>(null);
 
   // Data from the server
   const [stats, setStats] = useState<DashboardStats>(EMPTY_STATS);
@@ -134,6 +149,69 @@ export default function AdminDashboard() {
     const loc = apiLocations.find(l => l.id === slotManageLocation);
     return loc?.turfConfigs.find(tc => (tc as any).type === slotManageTurf)?.id;
   }, [apiLocations, slotManageLocation, slotManageTurf]);
+
+  // Phone-booking helpers: turf config, its hourly price, and which start slots
+  // are still free for the chosen branch/turf/date.
+  const phoneTurfConfig = useMemo(() => {
+    const loc = apiLocations.find(l => l.id === phoneLocation);
+    return loc?.turfConfigs.find(tc => (tc as any).type === phoneTurf);
+  }, [apiLocations, phoneLocation, phoneTurf]);
+
+  const phoneOccupiedSlots = useMemo(() => {
+    const occupied = new Set<string>();
+    for (const b of allBookings) {
+      if (b.locationId !== phoneLocation || b.turfType !== phoneTurf || b.date !== phoneDate || b.status === 'Cancelled') continue;
+      const start = TIME_SLOTS.indexOf(b.timeSlot);
+      if (start === -1) { occupied.add(b.timeSlot); continue; }
+      for (let i = 0; i < b.duration && start + i < TIME_SLOTS.length; i++) occupied.add(TIME_SLOTS[start + i]);
+    }
+    return occupied;
+  }, [allBookings, phoneLocation, phoneTurf, phoneDate]);
+
+  const phoneAvailableSlots = useMemo(
+    () => TIME_SLOTS.filter(s => !phoneOccupiedSlots.has(s)),
+    [phoneOccupiedSlots],
+  );
+
+  const phonePrice = (phoneTurfConfig?.pricePerHour ?? 0) * phoneDuration;
+
+  const handlePhoneBooking = async () => {
+    setPhoneFeedback(null);
+    if (!phoneName.trim() || !phonePhone.trim() || !phoneStartSlot) {
+      setPhoneFeedback({ ok: false, msg: 'Enter customer name, phone, and pick a start slot.' });
+      return;
+    }
+    if (!phoneTurfConfig) {
+      setPhoneFeedback({ ok: false, msg: 'Turf details still loading, try again in a moment.' });
+      return;
+    }
+    setPhoneSubmitting(true);
+    try {
+      await apiPost('/admin/manual-booking', {
+        locationId: phoneLocation,
+        turfConfigId: phoneTurfConfig.id,
+        date: phoneDate,
+        timeSlot: phoneStartSlot,
+        duration: phoneDuration,
+        customerName: phoneName.trim(),
+        customerPhone: phonePhone.trim(),
+        paymentStatus: phonePaid ? 'Paid' : 'Pending',
+      });
+      setPhoneFeedback({ ok: true, msg: `Booked ${phoneStartSlot} for ${phoneName.trim()} (${phoneDuration}h · ₹${phonePrice.toLocaleString('en-IN')}).` });
+      setPhoneName('');
+      setPhonePhone('');
+      setPhoneStartSlot('');
+      setPhoneDuration(1);
+      setPhonePaid(false);
+      refreshBookings();
+      refreshStats();
+      refreshCustomers();
+    } catch (e: any) {
+      setPhoneFeedback({ ok: false, msg: e?.message || 'Failed to create the booking.' });
+    } finally {
+      setPhoneSubmitting(false);
+    }
+  };
 
   // Slots representation for selected date in Slot Management
   const slotGridStatus = useMemo(() => {
@@ -235,6 +313,7 @@ export default function AdminDashboard() {
               { id: 'overview', label: 'Live Overview', icon: <BarChart3 className="w-4 h-4" /> },
               { id: 'analytics', label: 'Sales & Insights', icon: <LineChart className="w-4 h-4" /> },
               { id: 'bookings', label: 'Bookings Table', icon: <Calendar className="w-4 h-4" /> },
+              { id: 'phone', label: 'Phone Booking', icon: <Phone className="w-4 h-4" /> },
               { id: 'slots', label: 'Slot Blocker', icon: <Clock className="w-4 h-4" /> },
               { id: 'customers', label: 'Customer Directory', icon: <Users className="w-4 h-4" /> }
             ].map((tab) => {
@@ -283,7 +362,9 @@ export default function AdminDashboard() {
                 ? 'Live Analytics & Performance'
                 : activeTab === 'analytics'
                   ? 'Sales & Insights'
-                  : `${activeTab} Management`}
+                  : activeTab === 'phone'
+                    ? 'Phone / Walk-in Booking'
+                    : `${activeTab} Management`}
             </h2>
           </div>
 
@@ -776,6 +857,169 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* ==================== B2. PHONE / WALK-IN BOOKING TAB ==================== */}
+        {activeTab === 'phone' && (
+          <div className="space-y-6 animate-fade-rise duration-500 max-w-3xl">
+            <div className="liquid-glass p-6 rounded-2xl border border-white/5 space-y-6">
+              <div>
+                <h3 className="font-semibold text-white text-base tracking-tight flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-brand-green" /> Book a slot for a caller
+                </h3>
+                <p className="text-xs text-ink-secondary mt-1 font-light leading-relaxed">
+                  When a customer calls or walks in, record their booking here. It counts toward revenue and the customer directory.
+                </p>
+              </div>
+
+              {/* Branch + turf selectors */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex bg-white/5 p-1 rounded-full border border-white/10 overflow-x-auto">
+                  {TURF_LOCATIONS.map(loc => (
+                    <button
+                      key={loc.id}
+                      onClick={() => { setPhoneLocation(loc.id); setPhoneStartSlot(''); }}
+                      className={`px-3 py-2 text-[10px] font-bold tracking-wide uppercase rounded-full transition-all cursor-pointer whitespace-nowrap
+                        ${phoneLocation === loc.id ? 'bg-white text-brand-navy' : 'text-ink-secondary hover:text-white'}`}
+                    >
+                      {loc.name.split(' (')[0]}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+                  {TURF_CONFIGS.map(t => (
+                    <button
+                      key={t.id}
+                      onClick={() => { setPhoneTurf(t.id); setPhoneStartSlot(''); }}
+                      className={`px-4 py-2 text-[10px] font-bold tracking-wide uppercase rounded-full transition-all cursor-pointer
+                        ${phoneTurf === t.id ? 'bg-white text-brand-navy' : 'text-ink-secondary hover:text-white'}`}
+                    >
+                      {t.id}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date + slot + duration */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-ink-secondary block mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    min={today}
+                    value={phoneDate}
+                    onChange={(e) => { setPhoneDate(e.target.value); setPhoneStartSlot(''); }}
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-ink-secondary block mb-1.5">Start Slot</label>
+                  <div className="relative">
+                    <select
+                      value={phoneStartSlot}
+                      onChange={(e) => setPhoneStartSlot(e.target.value)}
+                      className="w-full pl-4 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none appearance-none cursor-pointer focus:border-white/30"
+                    >
+                      <option value="" className="bg-[#0a1118]">Select a free slot…</option>
+                      {phoneAvailableSlots.map(s => (
+                        <option key={s} value={s} className="bg-[#0a1118] text-white">{s}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-ink-secondary pointer-events-none" />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-ink-secondary block mb-1.5">Duration (hrs)</label>
+                  <div className="relative">
+                    <select
+                      value={phoneDuration}
+                      onChange={(e) => setPhoneDuration(Number(e.target.value))}
+                      className="w-full pl-4 pr-8 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none appearance-none cursor-pointer focus:border-white/30"
+                    >
+                      {[1, 2, 3, 4].map(h => (
+                        <option key={h} value={h} className="bg-[#0a1118] text-white">{h} hour{h > 1 ? 's' : ''}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="w-3 h-3 absolute right-3 top-1/2 -translate-y-1/2 text-ink-secondary pointer-events-none" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-ink-secondary block mb-1.5">Customer Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ravi Kumar"
+                    value={phoneName}
+                    onChange={(e) => setPhoneName(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white/30 placeholder:opacity-30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wider text-ink-secondary block mb-1.5">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="10-digit phone"
+                    value={phonePhone}
+                    onChange={(e) => setPhonePhone(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white/30 placeholder:opacity-30"
+                  />
+                </div>
+              </div>
+
+              {/* Payment + summary + submit */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-t border-white/5 pt-5">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-ink-secondary">Payment</span>
+                  <div className="flex bg-white/5 p-1 rounded-full border border-white/10">
+                    <button
+                      onClick={() => setPhonePaid(false)}
+                      className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-full transition-all cursor-pointer
+                        ${!phonePaid ? 'bg-white text-brand-navy' : 'text-ink-secondary hover:text-white'}`}
+                    >
+                      Pay at Venue
+                    </button>
+                    <button
+                      onClick={() => setPhonePaid(true)}
+                      className={`px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide rounded-full transition-all cursor-pointer
+                        ${phonePaid ? 'bg-white text-brand-navy' : 'text-ink-secondary hover:text-white'}`}
+                    >
+                      Paid
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <span className="text-[9px] uppercase tracking-wider text-ink-secondary block">Total</span>
+                    <span className="text-lg font-semibold text-white">₹{phonePrice.toLocaleString('en-IN')}</span>
+                  </div>
+                  <button
+                    onClick={handlePhoneBooking}
+                    disabled={phoneSubmitting}
+                    className="px-6 py-3 rounded-full bg-brand-green text-brand-navy text-[10px] font-bold uppercase tracking-wide hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Check className="w-3.5 h-3.5" strokeWidth={2.5} />
+                    {phoneSubmitting ? 'Booking…' : 'Confirm Booking'}
+                  </button>
+                </div>
+              </div>
+
+              {phoneFeedback && (
+                <div className={`text-xs rounded-xl px-4 py-3 border ${phoneFeedback.ok
+                  ? 'bg-brand-green/10 border-brand-green/20 text-brand-green'
+                  : 'bg-red-400/10 border-red-400/20 text-red-300'}`}>
+                  {phoneFeedback.msg}
+                </div>
+              )}
+
+              {phoneAvailableSlots.length === 0 && (
+                <p className="text-[11px] text-amber-300">No free slots left for this branch/turf on {phoneDate}.</p>
+              )}
+            </div>
           </div>
         )}
 

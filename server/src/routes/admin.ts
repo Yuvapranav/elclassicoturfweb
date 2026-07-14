@@ -1,8 +1,17 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { requireAdmin } from '../lib/auth';
 import { serializeBooking } from '../lib/serialize';
-import { todayIST, currentMonthIST, lastMonthIST, lastNDatesIST } from '../lib/constants';
+import {
+  todayIST,
+  currentMonthIST,
+  lastMonthIST,
+  lastNDatesIST,
+  getConsecutiveSlots,
+  DATE_RE,
+  MAX_BOOKING_HOURS,
+} from '../lib/constants';
 
 const router = Router();
 
@@ -156,6 +165,84 @@ router.patch('/bookings/:id', async (req, res) => {
     res.json(serializeBooking(booking));
   } catch (err) {
     res.status(404).json({ error: 'Booking not found' });
+  }
+});
+
+// Owner books a slot on behalf of a caller / walk-in. Records a real booking
+// (real name + phone, counts toward revenue and the customer directory),
+// unlike /slot-block which just holds an anonymous slot.
+router.post('/manual-booking', async (req, res) => {
+  const { locationId, turfConfigId, date, timeSlot, duration, customerName, customerPhone, paymentStatus } = req.body || {};
+
+  if (!locationId || !turfConfigId || !date || !timeSlot || !duration || !customerName || !customerPhone) {
+    return res.status(400).json({ error: 'Missing required booking fields' });
+  }
+  if (typeof date !== 'string' || !DATE_RE.test(date) || isNaN(Date.parse(date))) {
+    return res.status(400).json({ error: 'Invalid date' });
+  }
+  if (date < todayIST()) {
+    return res.status(400).json({ error: 'Cannot book a date in the past' });
+  }
+  if (!Number.isInteger(duration) || duration < 1 || duration > MAX_BOOKING_HOURS) {
+    return res.status(400).json({ error: `Duration must be between 1 and ${MAX_BOOKING_HOURS} hours` });
+  }
+
+  const turfConfig = await prisma.turfConfig.findUnique({ where: { id: turfConfigId } });
+  if (!turfConfig || turfConfig.locationId !== locationId) {
+    return res.status(400).json({ error: 'Invalid location/turf configuration' });
+  }
+
+  const slots = getConsecutiveSlots(timeSlot, duration);
+  if (!slots) {
+    return res.status(400).json({ error: 'Invalid time slot / duration combination' });
+  }
+
+  const amount = turfConfig.pricePerHour * duration;
+  const payStatus = paymentStatus === 'Paid' ? 'Paid' : 'Pending';
+
+  try {
+    const booking = await prisma.$transaction(
+      async (tx) => {
+        const existing = await tx.booking.findMany({
+          where: { locationId, turfConfigId, date, status: { not: 'Cancelled' } },
+          select: { timeSlot: true, duration: true },
+        });
+        const occupied = new Set<string>();
+        for (const b of existing) {
+          (getConsecutiveSlots(b.timeSlot, b.duration) || [b.timeSlot]).forEach((s) => occupied.add(s));
+        }
+        if (slots.some((s) => occupied.has(s))) {
+          throw new Error('SLOT_TAKEN');
+        }
+        return tx.booking.create({
+          data: {
+            customerName,
+            customerPhone,
+            locationId,
+            turfConfigId,
+            date,
+            timeSlot,
+            duration,
+            amount,
+            paymentMethod: 'Cash',
+            paymentStatus: payStatus,
+            status: 'Confirmed',
+          },
+          include: { turfConfig: true },
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    res.status(201).json(serializeBooking(booking));
+  } catch (err: any) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && (err.code === 'P2002' || err.code === 'P2034')) {
+      return res.status(409).json({ error: 'One or more of those slots is already booked' });
+    }
+    if (err?.message === 'SLOT_TAKEN') {
+      return res.status(409).json({ error: 'One or more of those slots is already booked' });
+    }
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create booking' });
   }
 });
 
